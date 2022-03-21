@@ -3,6 +3,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from PIL import Image, ExifTags
+from MTB import alignmentMTB
 
 
 class HDR():
@@ -112,11 +113,7 @@ class HDR():
 
 
 def alignImages(images):
-    alignMTB = cv2.createAlignMTB()
-    alignMTB.process(images, images)
-
-    return images
-
+    return alignmentMTB(images)
 
 def readFileAndExposureTimes(imageFileNames):
     exposureTimes = []
@@ -138,7 +135,7 @@ if __name__ == '__main__':
 
     images, exposureTimes = readFileAndExposureTimes(imageFileNames)
 
-    alignImages(images)
+    images = alignImages(images)
 
     hdr = HDR()
     result = hdr.process(images, exposureTimes)

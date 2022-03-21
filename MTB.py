@@ -63,9 +63,13 @@ def alignmentMTB(images, reference_image_index=None, grayscale=False, shift_bits
     Median Threshold Bitmap alignment algorithm.
     Arguments:
         images: a list of images
+        reference_image_index: the index of reference image (which will not be shifted)
         grayscale: True if the inputs are grayscale images
+        shift_bits: (shift_bits + 1) equals the number of pyramid levels
+        percentile: the percentile for creating threshold bitmap
+        exclude_range: the (additive) range for computing exclusion bitmap
     Return value:
-        
+        A numpy array of aligned images
     '''
 
     if reference_image_index is None:
@@ -74,9 +78,11 @@ def alignmentMTB(images, reference_image_index=None, grayscale=False, shift_bits
     if not grayscale:
         # 0.299 * R + 0.587 * G + 0.114 * B
         # These ratios are different from those proposed by the paper
-        images = [cv.cvtColor(image, cv.COLOR_BGR2GRAY) for image in images]
+        grayImages = [cv.cvtColor(image, cv.COLOR_BGR2GRAY) for image in images]
+    else:
+        grayImages = images
 
-    pyramids = buildMTBPyramid(images, shift_bits + 1, percentile, exclude_range)
+    pyramids = buildMTBPyramid(grayImages, shift_bits + 1, percentile, exclude_range)
 
     alignedImages = []
     for i in range(len(images)):
@@ -86,10 +92,24 @@ def alignmentMTB(images, reference_image_index=None, grayscale=False, shift_bits
             x_shift, y_shift = alignmentMTBPair(pyramids[reference_image_index], pyramids[i], shift_bits + 1)
             alignedImages.append(translateImage(images[i], x_shift, y_shift))
 
-    return alignedImages
+    return np.array(alignedImages)
 
 
 if __name__ == '__main__':
     images = [cv.imread(str(i) + '.jpeg') for i in [1, 2, 3, 4]]
-    alignedImages = alignmentMTB(images)
+
+    reference_index = 2
+
+    alignedImages = alignmentMTB(images, reference_image_index=reference_index)
+    
+    # compare with opencv's implementation
+    alignMTB = cv.createAlignMTB()
+    for i in range(len(images)):
+        if i == reference_index:
+            print("ref img")
+        else:
+            img1 = cv.cvtColor(images[reference_index], cv.COLOR_BGR2GRAY)
+            img2 = cv.cvtColor(images[i], cv.COLOR_BGR2GRAY)
+            print(alignMTB.calculateShift(img1, img2))
+
     pass
