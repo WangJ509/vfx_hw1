@@ -1,13 +1,17 @@
 import cv2
 import numpy as np
 import random
+import argparse
+import glob
+import os
 import matplotlib.pyplot as plt
 from PIL import Image, ExifTags
 from MTB import alignmentMTB
 
 
 class HDR():
-    def __init__(self, l=10, n_samples=100, random_seed=0):
+    def __init__(self, sourceDirectory=".", l=10, n_samples=100, random_seed=0):
+        self.sourceDirectory = sourceDirectory
         self.l = l
         self.n_samples = n_samples
         self.random_seed = random_seed
@@ -38,7 +42,7 @@ class HDR():
         fig, ax = plt.subplots(1, channels, figsize=(5 * channels, 5))
 
         colors = ['blue', 'green', 'red']
-        
+
         for c in range(channels):
             ax[c].plot(gs[c], np.arange(256), c=colors[c])
             ax[c].set_title(colors[c])
@@ -46,7 +50,7 @@ class HDR():
             ax[c].set_ylabel('Z: Pixel Value')
             ax[c].grid(linestyle=':', linewidth=1)
 
-        plt.show()
+        fig.savefig(os.path.join(self.sourceDirectory, "response_curve.jpeg"))
 
     def process(self, images, exposureTimes):
         B = np.log(exposureTimes)
@@ -64,8 +68,8 @@ class HDR():
             gs.append(g)
             radiance = self.reconstructRadiance(Z, B, g)
             result[..., color] = radiance.reshape(height, width)
-        
-        # self.plotResponseCurves(gs)
+
+        self.plotResponseCurves(gs)
         return result
 
     def processOneColor(self, Z, B):
@@ -115,6 +119,7 @@ class HDR():
 def alignImages(images):
     return alignmentMTB(images)
 
+
 def readFileAndExposureTimes(imageFileNames):
     exposureTimes = []
     # extract exposure time from exif information
@@ -131,27 +136,48 @@ def readFileAndExposureTimes(imageFileNames):
 
 
 if __name__ == '__main__':
-    imageFileNames = ['1.jpeg', '2.jpeg', '3.jpeg', '4.jpeg']
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-s", "--source", help="image source directory path, default: test1", default="test1")
+    parser.add_argument(
+        "-r", "--random", help="random seed", default=0, type=int)
+    parser.add_argument(
+        "-n", "--number_sample", help="number of samples", default=100, type=int)
+    args = parser.parse_args()
+    sourceDirectory = args.source
+    randomSeed = args.random
+    number_sample = args.number_sample
 
+    jpegFiles = glob.glob(sourceDirectory + "/*.jpeg")
+    imageFileNames = []
+    for file in jpegFiles:
+        if "result" in file:
+            continue
+        if "response_curve" in file:
+            continue
+        imageFileNames.append(file)
+
+    print(imageFileNames)
     images, exposureTimes = readFileAndExposureTimes(imageFileNames)
 
     images = alignImages(images)
 
-    hdr = HDR()
+    hdr = HDR(sourceDirectory, n_samples=number_sample, random_seed=randomSeed)
     result = hdr.process(images, exposureTimes)
-    print (result.max())
-    cv2.imwrite('result.hdr', result)
-
-    # merge_debevec = cv2.createMergeDebevec()  
-    # hdr_debevec = merge_debevec.process(images, exposureTimes)
-    # cv2.imwrite('debevec.hdr', hdr_debevec)
+    cv2.imwrite(os.path.join(sourceDirectory, 'result.hdr'), result)
 
     tonemap1 = cv2.createTonemap(gamma=2.2)
 
-    res = 2.5    * tonemap1.process(result.copy())
-    cv2.imwrite("result.jpeg", 255 * res)
+    merge_debevec = cv2.createMergeDebevec()
+    hdr_debevec = merge_debevec.process(images, exposureTimes)
+    # cv2.imwrite('debevec.hdr', hdr_debevec)
+    res_debevec = tonemap1.process(hdr_debevec)
+    cv2.imshow("opencv", res_debevec)
+
+    res = 2.5 * tonemap1.process(result.copy())
+    cv2.imwrite(os.path.join(sourceDirectory, 'result.jpeg'), 255 * res)
 
     cv2.imshow("JingMei", res)
-    cv2.setWindowProperty("JingMei", cv2.WND_PROP_TOPMOST, 1)
+    # cv2.setWindowProperty("JingMei", cv2.WND_PROP_TOPMOST, 1)
 
     cv2.waitKey(0)
